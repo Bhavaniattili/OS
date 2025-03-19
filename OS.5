@@ -1,0 +1,85 @@
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;semaphore.h&gt;
+#include &lt;unistd.h&gt;
+#define MAX_PORTS 3 // Maximum number of ports that can be opened at a time
+// Semaphore declaration
+sem_t semaphore;
+// Monitor structure
+typedef struct {
+pthread_mutex_t lock;
+pthread_cond_t condition;
+int open_ports;
+} Monitor;
+Monitor monitor = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0};
+// Function to simulate opening a port using Semaphore
+void *open_port_semaphore(void *arg) {
+int port = *(int *)arg;
+sem_wait(&amp;semaphore);
+printf(&quot;Port %d opened using Semaphore.\n&quot;, port);
+sleep(2); // Simulating work on the port
+printf(&quot;Port %d closed using Semaphore.\n&quot;, port);
+sem_post(&amp;semaphore);
+return NULL;
+}
+// Function to simulate opening a port using Monitor
+void *open_port_monitor(void *arg) {
+int port = *(int *)arg;
+pthread_mutex_lock(&amp;monitor.lock);
+while (monitor.open_ports &gt;= MAX_PORTS) {
+pthread_cond_wait(&amp;monitor.condition, &amp;monitor.lock);
+}
+monitor.open_ports++;
+printf(&quot;Port %d opened using Monitor.\n&quot;, port);
+pthread_mutex_unlock(&amp;monitor.lock);
+sleep(2); // Simulating work on the port
+pthread_mutex_lock(&amp;monitor.lock);
+monitor.open_ports--;
+
+printf(&quot;Port %d closed using Monitor.\n&quot;, port);
+pthread_cond_signal(&amp;monitor.condition);
+pthread_mutex_unlock(&amp;monitor.lock);
+return NULL;
+}
+int main() {
+int choice, num_ports;
+pthread_t threads[10];
+printf(&quot;Select synchronization mechanism:\n&quot;);
+printf(&quot;1. Semaphore\n&quot;);
+printf(&quot;2. Monitor\n&quot;);
+printf(&quot;Enter choice: &quot;);
+scanf(&quot;%d&quot;, &amp;choice);
+printf(&quot;Enter number of ports to open (max 10): &quot;);
+scanf(&quot;%d&quot;, &amp;num_ports);
+if (num_ports &gt; 10) num_ports = 10;
+int ports[num_ports];
+for (int i = 0; i &lt; num_ports; i++) {
+ports[i] = i + 1; // Assign port numbers
+}
+switch (choice) {
+case 1:
+sem_init(&amp;semaphore, 0, MAX_PORTS);
+for (int i = 0; i &lt; num_ports; i++) {
+pthread_create(&amp;threads[i], NULL, open_port_semaphore, &amp;ports[i]);
+}
+for (int i = 0; i &lt; num_ports; i++) {
+pthread_join(threads[i], NULL);
+}
+sem_destroy(&amp;semaphore);
+break;
+case 2:
+for (int i = 0; i &lt; num_ports; i++) {
+pthread_create(&amp;threads[i], NULL, open_port_monitor, &amp;ports[i]);
+}
+for (int i = 0; i &lt; num_ports; i++) {
+pthread_join(threads[i], NULL);
+}
+break;
+default:
+printf(&quot;Invalid choice.\n&quot;);
+
+break;
+}
+return 0;
+}
